@@ -109,19 +109,21 @@ func (s *System) run() {
 			}
 			s.Lock.Unlock()
 		case task := <-s.Router:
-			assigned := false
 			for _, w := range workers {
 				if w.Queue.Id == task.QueueID {
 					if len(w.TaskChan) < cap(w.TaskChan) {
+						if len(w.TaskChan) == 9 {
+							w.BufferFull = true
+						}
 						w.TaskChan <- task
-						assigned = true
 						break
 					}
+					for _, q := range s.Queues {
+						if w.Queue == q {
+							q.Tasks = append(q.Tasks, task)
+						}
+					}
 				}
-			}
-			if !assigned {
-				fmt.Printf("No Worker Available for Task %d\n", task.Id)
-				// Route these to a different queue
 			}
 		case worker := <-s.WorkerRegister:
 			s.Lock.Lock()
@@ -143,11 +145,12 @@ func (s *System) run() {
 }
 
 type Worker struct {
-	ID       int
-	Queue    *Queue
-	Done     chan struct{}
-	Busy     bool
-	TaskChan chan *Task
+	ID         int
+	Queue      *Queue
+	Done       chan struct{}
+	Busy       bool
+	BufferFull bool
+	TaskChan   chan *Task
 }
 
 func newWorker(id int, queue *Queue) *Worker {
@@ -162,24 +165,41 @@ func newWorker(id int, queue *Queue) *Worker {
 
 func (w *Worker) readPump() {
 	for {
+		task := w.checkQueue()
+		if task != nil {
+			w.runTask(task)
+		}
 		select {
 		case task := <-w.TaskChan:
-			w.Busy = true
-			task.Lock.Lock()
-			task.Status = TaskRunning
-			task.Lock.Unlock()
-			fmt.Printf("Worker %d is Processing Task %d\n", w.ID, task.Id)
-			time.Sleep(10 * time.Second)
-			task.Lock.Lock()
-			task.Status = TaskCompleted
-			task.Done = true
-			task.Lock.Unlock()
-			fmt.Printf("Worker %d completed Task %d\n", w.ID, task.Id)
-			w.Busy = false
+			w.runTask(task)
 		case <-w.Done:
 			fmt.Printf("Worker %d Shutting Down\n", w.ID)
 		}
 	}
+}
+
+func (w *Worker) checkQueue() *Task {
+	if len(w.Queue.Tasks) > 1 {
+		t := w.Queue.Tasks[0]
+		w.Queue.Tasks = w.Queue.Tasks[1:]
+		return t
+	}
+	return nil
+}
+
+func (w *Worker) runTask(task *Task) {
+	w.Busy = true
+	task.Lock.Lock()
+	task.Status = TaskRunning
+	task.Lock.Unlock()
+	fmt.Printf("Worker %d is Processing Task %d\n", w.ID, task.Id)
+	time.Sleep(10 * time.Second)
+	task.Lock.Lock()
+	task.Status = TaskCompleted
+	task.Done = true
+	task.Lock.Unlock()
+	fmt.Printf("Worker %d completed Task %d\n", w.ID, task.Id)
+	w.Busy = false
 }
 
 func main() {
