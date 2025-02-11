@@ -1,98 +1,39 @@
 package main
 
 import (
-	"fmt"
+	"message-broker/queue"
+	"message-broker/task"
+	"message-broker/worker"
 	"sync"
 	"time"
 )
 
-type Task struct {
-	Id        int
-	QueueID   int
-	Lock      sync.RWMutex
-	KV        map[string][]byte
-	Done      bool
-	Priority  int
-	Timeout   int
-	Status    TaskStatus
-	CreatedAt time.Time
-	Error     error
-}
-
-func newTask(id int, queueID int, key string, value []byte, opts *TaskOptions) *Task {
-	var priority int
-	var timeout int
-
-	if opts == nil {
-		priority = 0
-		timeout = 10
-	} else {
-		priority = opts.Priority
-		timeout = opts.Timeout
-	}
-
-	t := &Task{
-		Id:        id,
-		QueueID:   queueID,
-		Done:      false,
-		Priority:  priority,
-		Timeout:   timeout,
-		Status:    TaskPending,
-		CreatedAt: time.Now(),
-		Error:     nil,
-		KV:        make(map[string][]byte),
-	}
-
-	t.KV[key] = value
-	return t
-}
-
-type TaskOptions struct {
-	Priority int
-	Timeout  int
-}
-
-type TaskStatus int
-
-const (
-	TaskPending TaskStatus = iota
-	TaskRunning
-	TaskCompleted
-	TaskFailed
-)
-
-type Queue struct {
-	Id    int
-	Tasks []*Task
-	Lock  sync.RWMutex
-}
-
 type System struct {
-	Queues           []*Queue
+	Queues           []*queue.Queue
 	Lock             sync.RWMutex
-	Register         chan *Queue
-	Unregister       chan *Queue
-	WorkerRegister   chan *Worker
-	WorkerUnregister chan *Worker
-	Router           chan *Task
+	Register         chan *queue.Queue
+	Unregister       chan *queue.Queue
+	WorkerRegister   chan *worker.Worker
+	WorkerUnregister chan *worker.Worker
+	Router           chan *task.Task
 	Done             chan struct{}
 }
 
 func newSystem() *System {
 	return &System{
-		Queues:           make([]*Queue, 0),
+		Queues:           make([]*queue.Queue, 0),
 		Lock:             sync.RWMutex{},
-		Register:         make(chan *Queue),
-		Unregister:       make(chan *Queue),
-		WorkerRegister:   make(chan *Worker),
-		WorkerUnregister: make(chan *Worker),
-		Router:           make(chan *Task),
+		Register:         make(chan *queue.Queue),
+		Unregister:       make(chan *queue.Queue),
+		WorkerRegister:   make(chan *worker.Worker),
+		WorkerUnregister: make(chan *worker.Worker),
+		Router:           make(chan *task.Task),
 		Done:             make(chan struct{}),
 	}
 }
 
 func (s *System) run() {
-	var workers = make([]*Worker, 0)
+	var workers = make([]*worker.Worker, 0)
 	for {
 		select {
 		case queue := <-s.Register:
@@ -144,75 +85,17 @@ func (s *System) run() {
 	}
 }
 
-type Worker struct {
-	ID         int
-	Queue      *Queue
-	Done       chan struct{}
-	Busy       bool
-	BufferFull bool
-	TaskChan   chan *Task
-}
-
-func newWorker(id int, queue *Queue) *Worker {
-
-	return &Worker{
-		ID:       id,
-		Queue:    queue,
-		Done:     make(chan struct{}),
-		TaskChan: make(chan *Task, 10),
-	}
-}
-
-func (w *Worker) readPump() {
-	for {
-		task := w.checkQueue()
-		if task != nil {
-			w.runTask(task)
-		}
-		select {
-		case task := <-w.TaskChan:
-			w.runTask(task)
-		case <-w.Done:
-			fmt.Printf("Worker %d Shutting Down\n", w.ID)
-		}
-	}
-}
-
-func (w *Worker) checkQueue() *Task {
-	if len(w.Queue.Tasks) > 1 {
-		t := w.Queue.Tasks[0]
-		w.Queue.Tasks = w.Queue.Tasks[1:]
-		return t
-	}
-	return nil
-}
-
-func (w *Worker) runTask(task *Task) {
-	w.Busy = true
-	task.Lock.Lock()
-	task.Status = TaskRunning
-	task.Lock.Unlock()
-	fmt.Printf("Worker %d is Processing Task %d\n", w.ID, task.Id)
-	time.Sleep(10 * time.Second)
-	task.Lock.Lock()
-	task.Status = TaskCompleted
-	task.Done = true
-	task.Lock.Unlock()
-	fmt.Printf("Worker %d completed Task %d\n", w.ID, task.Id)
-	w.Busy = false
-}
-
 func main() {
 	s := newSystem()
 	go s.run()
-	q := &Queue{
+	q := &queue.Queue{
 		Id:    1,
-		Tasks: make([]*Task, 0),
+		Tasks: make([]*task.Task, 0),
 		Lock:  sync.RWMutex{},
 	}
 	s.Register <- q
-	w := newWorker(1, q)
-	go w.readPump()
+	w := worker.NewWorker(1, q)
+	go w.ReadPump()
 	s.WorkerRegister <- w
 	go TaskCreator(s)
 	select {}
@@ -222,7 +105,7 @@ func TaskCreator(s *System) {
 	id := 1
 	for {
 		time.Sleep(2 * time.Second)
-		t := newTask(id, 1, "key", []byte("value"), nil)
+		t := task.NewTask(id, 1, "key", []byte("value"), nil)
 		s.Router <- t
 		id++
 	}
