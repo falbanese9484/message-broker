@@ -4,25 +4,23 @@ import (
 	"fmt"
 	"message-broker/queue"
 	"message-broker/task"
+	"sort"
 	"time"
 )
 
 type Worker struct {
-	ID         int
-	Queue      *queue.Queue
-	Done       chan struct{}
-	Busy       bool
-	BufferFull bool
-	TaskChan   chan *task.Task
+	ID    int
+	Queue *queue.Queue
+	Done  chan struct{}
+	Busy  bool
 }
 
 func NewWorker(id int, queue *queue.Queue) *Worker {
 
 	return &Worker{
-		ID:       id,
-		Queue:    queue,
-		Done:     make(chan struct{}),
-		TaskChan: make(chan *task.Task, 10),
+		ID:    id,
+		Queue: queue,
+		Done:  make(chan struct{}),
 	}
 }
 
@@ -32,23 +30,26 @@ func (w *Worker) ReadPump() {
 		if task != nil {
 			w.RunTask(task)
 		}
-		select {
-		case task := <-w.TaskChan:
-			w.BufferFull = false
-			w.RunTask(task)
-		case <-w.Done:
-			fmt.Printf("Worker %d Shutting Down\n", w.ID)
-		}
 	}
 }
 
 func (w *Worker) CheckQueue() *task.Task {
-	if len(w.Queue.Tasks) > 1 {
+	w.Queue.Lock.Lock()
+	defer w.Queue.Lock.Unlock()
+	if len(w.Queue.Tasks) == 0 {
+		return nil
+	}
+	if len(w.Queue.Tasks) == 1 {
 		t := w.Queue.Tasks[0]
-		w.Queue.Tasks = w.Queue.Tasks[1:]
+		w.Queue.Tasks = w.Queue.Tasks[:0]
 		return t
 	}
-	return nil
+	sort.Slice(w.Queue.Tasks, func(i, j int) bool {
+		return w.Queue.Tasks[i].Id < w.Queue.Tasks[j].Id
+	})
+	t := w.Queue.Tasks[0]
+	w.Queue.Tasks = w.Queue.Tasks[1:]
+	return t
 }
 
 func (w *Worker) RunTask(t *task.Task) {
