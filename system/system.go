@@ -2,10 +2,11 @@ package system
 
 import (
 	"fmt"
-	"message-broker/queue"
-	"message-broker/task"
-	"message-broker/worker"
 	"sync"
+
+	"github.com/falbanese9484/message-broker/queue"
+	"github.com/falbanese9484/message-broker/task"
+	"github.com/falbanese9484/message-broker/worker"
 )
 
 type System struct {

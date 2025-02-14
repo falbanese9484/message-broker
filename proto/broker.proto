@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package broker;
+
+option go_package = "message-broker/proto;proto";
+
+// The Broker service definition.
+service Broker {
+  // Register a worker for a given queue.
+  rpc RegisterWorker (RegisterRequest) returns (RegisterResponse);
+  // Client requests a task for a particular queue (pull model).
+  rpc GetTask (TaskRequest) returns (TaskResponse);
+}
+
+// Request message to register worker(s).
+message RegisterRequest {
+  int64 queue_id = 1;
+  int64 worker_count = 2;
+}
+
+// Response message after registration.
+message RegisterResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Request message for fetching a task.
+message TaskRequest {
+  int64 queue_id = 1;
+}
+
+// Response message containing task(s).
+message TaskResponse {
+  repeated Task tasks = 1;
+}
+
+// A Task message.
+message Task {
+  int64 id = 1;
+  string description = 2;
+  // Add other fields as needed.
+}

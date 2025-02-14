@@ -2,10 +2,11 @@ package worker
 
 import (
 	"fmt"
-	"message-broker/queue"
-	"message-broker/task"
 	"sort"
 	"time"
+
+	"github.com/falbanese9484/message-broker/queue"
+	"github.com/falbanese9484/message-broker/task"
 )
 
 type Worker struct {

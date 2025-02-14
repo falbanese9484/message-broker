@@ -1,8 +1,9 @@
 package queue
 
 import (
-	"message-broker/task"
 	"sync"
+
+	"github.com/falbanese9484/message-broker/task"
 )
 
 type Queue struct {
