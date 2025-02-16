@@ -7,7 +7,8 @@ import (
 )
 
 type Queue struct {
-	Id    int
-	Tasks []*task.Task
-	Lock  sync.RWMutex
+	Id        int
+	Namespace string
+	Tasks     []*task.Task
+	Lock      sync.RWMutex
 }

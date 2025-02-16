@@ -14,5 +14,4 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20241202173237-19429a94021a // indirect
 )
 
-
-
+replace github.com/falbanese9484/message-broker => .
