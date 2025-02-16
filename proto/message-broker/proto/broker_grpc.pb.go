@@ -20,7 +20,8 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	Broker_RegisterWorker_FullMethodName = "/broker.Broker/RegisterWorker"
-	Broker_GetTask_FullMethodName        = "/broker.Broker/GetTask"
+	Broker_RegisterQueue_FullMethodName  = "/broker.Broker/RegisterQueue"
+	Broker_SendTask_FullMethodName       = "/broker.Broker/SendTask"
 )
 
 // BrokerClient is the client API for Broker service.
@@ -29,10 +30,9 @@ const (
 //
 // The Broker service definition.
 type BrokerClient interface {
-	// Register a worker for a given queue.
-	RegisterWorker(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterResponse, error)
-	// Client requests a task for a particular queue (pull model).
-	GetTask(ctx context.Context, in *TaskRequest, opts ...grpc.CallOption) (*TaskResponse, error)
+	RegisterWorker(ctx context.Context, in *WorkerRequest, opts ...grpc.CallOption) (*WorkerResponse, error)
+	RegisterQueue(ctx context.Context, in *QueueRequest, opts ...grpc.CallOption) (*QueueResponse, error)
+	SendTask(ctx context.Context, in *TaskRequest, opts ...grpc.CallOption) (*TaskResponse, error)
 }
 
 type brokerClient struct {
@@ -43,9 +43,9 @@ func NewBrokerClient(cc grpc.ClientConnInterface) BrokerClient {
 	return &brokerClient{cc}
 }
 
-func (c *brokerClient) RegisterWorker(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterResponse, error) {
+func (c *brokerClient) RegisterWorker(ctx context.Context, in *WorkerRequest, opts ...grpc.CallOption) (*WorkerResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RegisterResponse)
+	out := new(WorkerResponse)
 	err := c.cc.Invoke(ctx, Broker_RegisterWorker_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -53,10 +53,20 @@ func (c *brokerClient) RegisterWorker(ctx context.Context, in *RegisterRequest, 
 	return out, nil
 }
 
-func (c *brokerClient) GetTask(ctx context.Context, in *TaskRequest, opts ...grpc.CallOption) (*TaskResponse, error) {
+func (c *brokerClient) RegisterQueue(ctx context.Context, in *QueueRequest, opts ...grpc.CallOption) (*QueueResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(QueueResponse)
+	err := c.cc.Invoke(ctx, Broker_RegisterQueue_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *brokerClient) SendTask(ctx context.Context, in *TaskRequest, opts ...grpc.CallOption) (*TaskResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(TaskResponse)
-	err := c.cc.Invoke(ctx, Broker_GetTask_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, Broker_SendTask_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -69,10 +79,9 @@ func (c *brokerClient) GetTask(ctx context.Context, in *TaskRequest, opts ...grp
 //
 // The Broker service definition.
 type BrokerServer interface {
-	// Register a worker for a given queue.
-	RegisterWorker(context.Context, *RegisterRequest) (*RegisterResponse, error)
-	// Client requests a task for a particular queue (pull model).
-	GetTask(context.Context, *TaskRequest) (*TaskResponse, error)
+	RegisterWorker(context.Context, *WorkerRequest) (*WorkerResponse, error)
+	RegisterQueue(context.Context, *QueueRequest) (*QueueResponse, error)
+	SendTask(context.Context, *TaskRequest) (*TaskResponse, error)
 	mustEmbedUnimplementedBrokerServer()
 }
 
@@ -83,11 +92,14 @@ type BrokerServer interface {
 // pointer dereference when methods are called.
 type UnimplementedBrokerServer struct{}
 
-func (UnimplementedBrokerServer) RegisterWorker(context.Context, *RegisterRequest) (*RegisterResponse, error) {
+func (UnimplementedBrokerServer) RegisterWorker(context.Context, *WorkerRequest) (*WorkerResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RegisterWorker not implemented")
 }
-func (UnimplementedBrokerServer) GetTask(context.Context, *TaskRequest) (*TaskResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetTask not implemented")
+func (UnimplementedBrokerServer) RegisterQueue(context.Context, *QueueRequest) (*QueueResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RegisterQueue not implemented")
+}
+func (UnimplementedBrokerServer) SendTask(context.Context, *TaskRequest) (*TaskResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SendTask not implemented")
 }
 func (UnimplementedBrokerServer) mustEmbedUnimplementedBrokerServer() {}
 func (UnimplementedBrokerServer) testEmbeddedByValue()                {}
@@ -111,7 +123,7 @@ func RegisterBrokerServer(s grpc.ServiceRegistrar, srv BrokerServer) {
 }
 
 func _Broker_RegisterWorker_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RegisterRequest)
+	in := new(WorkerRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -123,25 +135,43 @@ func _Broker_RegisterWorker_Handler(srv interface{}, ctx context.Context, dec fu
 		FullMethod: Broker_RegisterWorker_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(BrokerServer).RegisterWorker(ctx, req.(*RegisterRequest))
+		return srv.(BrokerServer).RegisterWorker(ctx, req.(*WorkerRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Broker_GetTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Broker_RegisterQueue_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueueRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BrokerServer).RegisterQueue(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Broker_RegisterQueue_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BrokerServer).RegisterQueue(ctx, req.(*QueueRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Broker_SendTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(TaskRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(BrokerServer).GetTask(ctx, in)
+		return srv.(BrokerServer).SendTask(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Broker_GetTask_FullMethodName,
+		FullMethod: Broker_SendTask_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(BrokerServer).GetTask(ctx, req.(*TaskRequest))
+		return srv.(BrokerServer).SendTask(ctx, req.(*TaskRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -158,8 +188,12 @@ var Broker_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Broker_RegisterWorker_Handler,
 		},
 		{
-			MethodName: "GetTask",
-			Handler:    _Broker_GetTask_Handler,
+			MethodName: "RegisterQueue",
+			Handler:    _Broker_RegisterQueue_Handler,
+		},
+		{
+			MethodName: "SendTask",
+			Handler:    _Broker_SendTask_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
