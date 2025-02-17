@@ -39,6 +39,7 @@ func (s *System) Run() {
 		select {
 		case queue := <-s.Register:
 			s.Lock.Lock()
+			queue.Id = len(s.Queues) + 1
 			s.Queues = append(s.Queues, queue)
 			s.Lock.Unlock()
 		case queue := <-s.Unregister:
@@ -54,24 +55,29 @@ func (s *System) Run() {
 			for _, q := range s.Queues {
 				if task.QueueID == q.Id {
 					q.Lock.Lock()
-					q.Tasks = append(q.Tasks, task)
+					task.Id = q.TaskCounter + 1
+					q.TaskCounter++
+					q.Tasks <- task
 					q.Lock.Unlock()
 					fmt.Printf("Added %d Task to Queue %d\n", task.Id, q.Id)
 				}
 			}
 		case worker := <-s.WorkerRegister:
 			s.Lock.Lock()
-			workers = append(workers, worker)
-			s.Lock.Unlock()
-		case worker := <-s.WorkerUnregister:
-			s.Lock.Lock()
-			for i, w := range workers {
-				if w == worker {
-					workers = append(workers[:i], workers[i+1:]...)
-					s.Lock.Unlock()
+			for _, q := range s.Queues {
+				if worker.QueueID == q.Id {
+					worker.Queue = q
 					break
 				}
 			}
+			workers = append(workers, worker)
+			go worker.Run()
+			s.Lock.Unlock()
+		case worker := <-s.WorkerUnregister:
+			s.Lock.Lock()
+			worker.ID = workers[len(workers)-1].ID + 1
+			workers = append(workers, worker)
+			s.Lock.Unlock()
 		case <-s.Done:
 			return
 		}

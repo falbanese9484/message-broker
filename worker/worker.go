@@ -1,8 +1,9 @@
 package worker
 
 import (
+	"encoding/json"
 	"fmt"
-	"sort"
+	"net"
 	"time"
 
 	"github.com/falbanese9484/message-broker/queue"
@@ -10,47 +11,35 @@ import (
 )
 
 type Worker struct {
-	ID    int
-	Queue *queue.Queue
-	Done  chan struct{}
-	Busy  bool
+	ID            int
+	QueueID       int
+	Queue         *queue.Queue
+	Done          chan struct{}
+	TCPConnection string
+	Conn          net.Conn
+	Busy          bool
 }
 
-func NewWorker(id int, queue *queue.Queue) *Worker {
+func NewWorker(queueID int, tcp string) *Worker {
 
 	return &Worker{
-		ID:    id,
-		Queue: queue,
-		Done:  make(chan struct{}),
+		QueueID:       queueID,
+		Done:          make(chan struct{}),
+		TCPConnection: tcp,
 	}
 }
 
-func (w *Worker) ReadPump() {
-	for {
-		task := w.CheckQueue()
-		if task != nil {
-			w.RunTask(task)
-		}
+func (w *Worker) Run() {
+	conn, err := net.Dial("tcp", w.TCPConnection)
+	if err != nil {
+		return
 	}
-}
+	defer conn.Close()
+	w.Conn = conn
 
-func (w *Worker) CheckQueue() *task.Task {
-	w.Queue.Lock.Lock()
-	defer w.Queue.Lock.Unlock()
-	if len(w.Queue.Tasks) == 0 {
-		return nil
+	for task := range w.Queue.Tasks {
+		w.RunTask(task)
 	}
-	if len(w.Queue.Tasks) == 1 {
-		t := w.Queue.Tasks[0]
-		w.Queue.Tasks = w.Queue.Tasks[:0]
-		return t
-	}
-	sort.Slice(w.Queue.Tasks, func(i, j int) bool {
-		return w.Queue.Tasks[i].Id < w.Queue.Tasks[j].Id
-	})
-	t := w.Queue.Tasks[0]
-	w.Queue.Tasks = w.Queue.Tasks[1:]
-	return t
 }
 
 func (w *Worker) RunTask(t *task.Task) {
@@ -58,12 +47,27 @@ func (w *Worker) RunTask(t *task.Task) {
 	t.Lock.Lock()
 	t.Status = task.TaskRunning
 	t.Lock.Unlock()
-	fmt.Printf("Worker %d is Processing Task %d\n", w.ID, t.Id)
-	time.Sleep(10 * time.Second)
+	marshalled, err := json.Marshal(t.Data)
+	if err != nil {
+		t.Lock.Lock()
+		t.Status = task.TaskFailed
+		t.Error = err
+		t.Lock.Unlock()
+		return
+	}
+	_, err = w.Conn.Write(marshalled)
+	if err != nil {
+		t.Lock.Lock()
+		t.Status = task.TaskFailed
+		t.Error = err
+		t.Lock.Unlock()
+		return
+	}
+	time.Sleep(time.Duration(t.Timeout) * time.Second)
 	t.Lock.Lock()
 	t.Status = task.TaskCompleted
 	t.Done = true
 	t.Lock.Unlock()
-	fmt.Printf("Worker %d completed Task %d\n", w.ID, t.Id)
+	fmt.Printf("Task %d completed\n", t.Id)
 	w.Busy = false
 }

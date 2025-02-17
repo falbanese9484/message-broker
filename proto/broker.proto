@@ -13,20 +13,20 @@ service Broker {
 
 message QueueRequest {
   string name = 1;
+  int32 buffer_length = 2;
 }
 
 message QueueResponse {
-  int32 id = 1;
-  int32 status = 2;
+  int32 status = 1;
 }
 
 message WorkerRequest {
   int32 queue = 1;
+  string tcp_connection = 2;
 }
 
 message WorkerResponse {
-  int32 id = 1;
-  int32 status = 2;
+  int32 status = 1;
 }
 
 message TaskRequest {
@@ -35,6 +35,5 @@ message TaskRequest {
 }
 
 message TaskResponse {
-  int32 id = 1;
-  int32 status = 2;
+  int32 status = 1;
 }

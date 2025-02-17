@@ -9,7 +9,7 @@ type Task struct {
 	Id        int
 	QueueID   int
 	Lock      sync.RWMutex
-	KV        map[string][]byte
+	Data      []byte
 	Done      bool
 	Priority  int
 	Timeout   int
@@ -18,9 +18,8 @@ type Task struct {
 	Error     error
 }
 
-func NewTask(id int, queueID int, key string, value []byte, opts *TaskOptions) *Task {
-	var priority int
-	var timeout int
+func NewTask(queueID int, data []byte, opts *TaskOptions) *Task {
+	var priority, timeout int
 
 	if opts == nil {
 		priority = 0
@@ -30,20 +29,16 @@ func NewTask(id int, queueID int, key string, value []byte, opts *TaskOptions) *
 		timeout = opts.Timeout
 	}
 
-	t := &Task{
-		Id:        id,
+	return &Task{
 		QueueID:   queueID,
+		Data:      data,
 		Done:      false,
 		Priority:  priority,
 		Timeout:   timeout,
 		Status:    TaskPending,
 		CreatedAt: time.Now(),
 		Error:     nil,
-		KV:        make(map[string][]byte),
 	}
-
-	t.KV[key] = value
-	return t
 }
 
 type TaskOptions struct {
