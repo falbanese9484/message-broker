@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/falbanese9484/message-broker/queue"
-	"github.com/falbanese9484/message-broker/task"
-	"github.com/falbanese9484/message-broker/worker"
+	"github.com/falbanese9484/message-broker/internal/queue"
+	"github.com/falbanese9484/message-broker/internal/task"
+	"github.com/falbanese9484/message-broker/internal/worker"
 )
 
 type System struct {

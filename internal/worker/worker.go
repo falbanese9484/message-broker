@@ -6,8 +6,8 @@ import (
 	"net"
 	"time"
 
-	"github.com/falbanese9484/message-broker/queue"
-	"github.com/falbanese9484/message-broker/task"
+	"github.com/falbanese9484/message-broker/internal/queue"
+	"github.com/falbanese9484/message-broker/internal/task"
 )
 
 type Worker struct {

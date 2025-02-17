@@ -3,7 +3,7 @@ package queue
 import (
 	"sync"
 
-	"github.com/falbanese9484/message-broker/task"
+	"github.com/falbanese9484/message-broker/internal/task"
 )
 
 type Queue struct {

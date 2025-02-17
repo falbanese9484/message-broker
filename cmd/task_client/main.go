@@ -13,6 +13,7 @@ import (
 
 	pb "github.com/falbanese9484/message-broker/proto/message-broker/proto"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 const (
@@ -62,14 +63,12 @@ func handleWorkerConnection(conn net.Conn) {
 }
 
 func main() {
-	// Start the TCP worker listener in a separate goroutine.
-	go startWorkerListener()
 
 	// Give the worker listener a moment to start.
 	time.Sleep(1 * time.Second)
 
 	// Connect to the gRPC broker.
-	conn, err := grpc.Dial(grpcAddr, grpc.WithInsecure(), grpc.WithBlock())
+	conn, err := grpc.NewClient(grpcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("failed to connect to broker: %v", err)
 	}
@@ -91,17 +90,6 @@ func main() {
 		log.Fatalf("failed to register queue: %v", err)
 	}
 	log.Printf("Queue registered, status: %d", qResp.Status)
-
-	// Register a worker.
-	workerReq := &pb.WorkerRequest{
-		Queue:         1, // assuming the registered queue gets ID 1
-		TcpConnection: workerTCPAddr,
-	}
-	wResp, err := client.RegisterWorker(ctx, workerReq)
-	if err != nil {
-		log.Fatalf("failed to register worker: %v", err)
-	}
-	log.Printf("Worker registered, status: %d", wResp.Status)
 
 	// Continuously send tasks so you can see the worker process them.
 	ticker := time.NewTicker(taskInterval)
