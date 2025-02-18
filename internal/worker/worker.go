@@ -1,13 +1,16 @@
 package worker
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
+	"log"
 	"net"
-	"time"
 
 	"github.com/falbanese9484/message-broker/internal/queue"
 	"github.com/falbanese9484/message-broker/internal/task"
+	pb "github.com/falbanese9484/message-broker/proto/message-broker/proto"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 type Worker struct {
@@ -17,6 +20,9 @@ type Worker struct {
 	Done          chan struct{}
 	TCPConnection string
 	Conn          net.Conn
+	Ctx           context.Context
+	Cancel        context.CancelFunc
+	BrokerConn    pb.BrokerClient
 	Busy          bool
 }
 
@@ -30,16 +36,22 @@ func NewWorker(queueID int, tcp string) *Worker {
 }
 
 func (w *Worker) Run() {
-	conn, err := net.Dial("tcp", w.TCPConnection)
+	brokerConn, err := grpc.NewClient(w.TCPConnection, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
+		log.Fatalf("Failed to connect to broker: %v", err)
 		return
 	}
-	defer conn.Close()
-	w.Conn = conn
+	brokerClient := pb.NewBrokerClient(brokerConn)
+	ctx := context.Background()
 
-	for task := range w.Queue.Tasks {
-		w.RunTask(task)
+	w.BrokerConn = brokerClient
+	w.Ctx = ctx
+
+	log.Println("Worker started, waiting for tasks...")
+	for t := range w.Queue.Tasks {
+		w.RunTask(t)
 	}
+	log.Println("Worker task channel closed, exiting Run()")
 }
 
 func (w *Worker) RunTask(t *task.Task) {
@@ -47,7 +59,13 @@ func (w *Worker) RunTask(t *task.Task) {
 	t.Lock.Lock()
 	t.Status = task.TaskRunning
 	t.Lock.Unlock()
-	marshalled, err := json.Marshal(t.Data)
+	t.Lock.Lock()
+	newTask := &pb.TaskRequest{
+		Queue: int32(t.QueueID),
+		Data:  []byte(t.Data),
+	}
+	t.Lock.Unlock()
+	resp, err := w.BrokerConn.SendTask(w.Ctx, newTask)
 	if err != nil {
 		t.Lock.Lock()
 		t.Status = task.TaskFailed
@@ -55,15 +73,14 @@ func (w *Worker) RunTask(t *task.Task) {
 		t.Lock.Unlock()
 		return
 	}
-	_, err = w.Conn.Write(marshalled)
-	if err != nil {
+	if resp == nil {
 		t.Lock.Lock()
 		t.Status = task.TaskFailed
-		t.Error = err
 		t.Lock.Unlock()
-		return
+		log.Fatalf("Received nil response from broker")
+		w.Queue.Tasks <- t
 	}
-	time.Sleep(time.Duration(t.Timeout) * time.Second)
+	// time.Sleep(time.Duration(t.Timeout) * time.Second)
 	t.Lock.Lock()
 	t.Status = task.TaskCompleted
 	t.Done = true
