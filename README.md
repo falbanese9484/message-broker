@@ -1,5 +1,7 @@
 # Message Broker Service
 
+https://github.com/user-attachments/assets/309f9592-0008-49ac-901a-c944c9d70510
+
 ## Overview
 
 The Message Broker Service is a centralized service designed to operate within a Kubernetes environment. It acts as a message broker for event-based and queued processes, facilitating communication between various components of a distributed system.
